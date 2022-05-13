@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# colab file that manage git
+git-manager.ipynb
+
+# .DS store
+.DS_Store
