@@ -133,3 +133,7 @@ git-manager.ipynb
 
 # .DS store
 .DS_Store
+
+# Data
+data/
+.zip
