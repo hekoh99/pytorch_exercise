@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset , DataLoader
 from torch.optim import Adam
+from torchvision import models
 from torch.autograd import Variable
 from torchvision import transforms
 
@@ -41,7 +42,7 @@ if not (path).exists():
 # custom dataset
 #--------------------------------------------------------
 
-class CatandDogSet(Dataset):
+class CatandDogSet(Dataset): # 확인용
     def __init__(self, path):
         self.path = path
         self.img_name = os.listdir(self.path)
@@ -56,7 +57,7 @@ class CatandDogSet(Dataset):
         label = img_idx.split(".")[0] # 파일명에서 해당 사진의 label 추출
         return img, label, img_item_path
 
-class CustomSet(Dataset):
+class CustomSet(Dataset): # 학습에 사용될 것
     def __init__(self, imgs, class_to_int, path, mode, transforms):
         self.imgs = imgs
         self.class_to_int = class_to_int
@@ -94,15 +95,15 @@ pred_imgs = [f"{path}.jpg" for path in range(1,len(os.listdir(TEST_PATH))+1)]
 class_to_int = {"cat" : 0 , "dog" : 1}
 train_transforms = transforms.Compose([
     transforms.Resize((360 , 360)) , 
-    transforms.RandomHorizontalFlip(p = 0.5) , 
+    transforms.RandomHorizontalFlip(p = 0.5) , # 0.5 확률로 좌우 반전
     transforms.ToTensor() , 
-    transforms.Normalize((0 , 0 , 0) , (1 , 1 , 1))
+    transforms.Normalize((0, 0, 0) , (1, 1, 1)) # 각 채널별로 mean과 std로 정규화
 ])
 
 test_pred_transforms = transforms.Compose([
     transforms.Resize((360 , 360)) , 
     transforms.ToTensor() , 
-    transforms.Normalize((0 , 0 , 0) , (1 , 1 , 1))
+    transforms.Normalize((0 , 0 , 0) , (1 , 1, 1))
 ])
 
 dataset = CatandDogSet(TRAIN_PATH)
@@ -114,5 +115,16 @@ test = DataLoader(CustomSet(test_imgs , class_to_int , TRAIN_PATH , "test" , tes
 pred = DataLoader(CustomSet(pred_imgs , class_to_int , TEST_PATH , "pred" , test_pred_transforms))
 
 img, label , path = dataset[np.random.randint(len(dataset))]
-plt.imshow(img)
-plt.show()
+train_feature, train_label = next(iter(train))
+check_img = np.transpose(train_feature[0], (1,2,0))
+# plt.imshow(check_img)
+# plt.show()
+# plt.imshow(img)
+# plt.show()
+
+#--------------------------------------------------------
+# get pre-trained model
+#--------------------------------------------------------
+
+resnet = models.resnet18(pretrained=True)
+print(resnet)
