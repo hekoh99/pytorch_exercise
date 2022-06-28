@@ -127,4 +127,8 @@ check_img = np.transpose(train_feature[0], (1,2,0))
 #--------------------------------------------------------
 
 resnet = models.resnet18(pretrained=True)
+num_classes = 2 # 개, 고양이로 분류
+num_ftrs = resnet.fc.in_features
+resnet.fc = nn.Linear(num_ftrs, num_classes)
+
 print(resnet)
