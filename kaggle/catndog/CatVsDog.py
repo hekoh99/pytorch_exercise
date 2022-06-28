@@ -56,4 +56,13 @@ class CatandDogSet(Dataset):
         label = img_idx.split(".")[0]
         return img, label, img_item_path
 
+#--------------------------------------------------------
+# extract datasets
+#--------------------------------------------------------
+
 imgs = os.listdir(TRAIN_PATH)
+train_imgs = np.random.choice(imgs , 20000, replace=False) # 비복원 추출
+
+test_imgs = np.setdiff1d(imgs , train_imgs) # imgs과 train_imgs의 차집합
+
+pred_imgs = [f"{path}.jpg" for path in range(1,len(os.listdir(TEST_PATH))+1)]
