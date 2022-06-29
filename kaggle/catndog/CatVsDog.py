@@ -149,7 +149,7 @@ batch_num = len(train)
 test_batch_num = len(test)
 losses = []
 
-for e in range(1):
+for e in range(EPOCHS):
     total_loss = 0
 
     progress = tqdm(enumerate(train), desc="Loss: ", total=batch_num)
