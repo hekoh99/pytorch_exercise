@@ -8,6 +8,7 @@ from zipfile import ZipFile
 
 from tqdm import tqdm
 from PIL import Image
+import torch.nn.functional as F
 
 import torch
 import torch.nn as nn
@@ -108,10 +109,11 @@ test_pred_transforms = transforms.Compose([
 
 dataset = CatandDogSet(TRAIN_PATH)
 
+EPOCHS = 5
 BATCH_SIZE = 20
 
-train = DataLoader(CustomSet(train_imgs , class_to_int , TRAIN_PATH , "train" , train_transforms) , batch_size = BATCH_SIZE , shuffle = True)
-test = DataLoader(CustomSet(test_imgs , class_to_int , TRAIN_PATH , "test" , test_pred_transforms) , batch_size = BATCH_SIZE , shuffle = True)
+train = DataLoader(CustomSet(train_imgs , class_to_int , TRAIN_PATH , "train" , train_transforms) , batch_size=BATCH_SIZE , shuffle = True)
+test = DataLoader(CustomSet(test_imgs , class_to_int , TRAIN_PATH , "test" , test_pred_transforms) , batch_size=BATCH_SIZE , shuffle = True)
 pred = DataLoader(CustomSet(pred_imgs , class_to_int , TEST_PATH , "pred" , test_pred_transforms))
 
 img, label , path = dataset[np.random.randint(len(dataset))]
@@ -126,9 +128,64 @@ check_img = np.transpose(train_feature[0], (1,2,0))
 # get pre-trained model
 #--------------------------------------------------------
 
-resnet = models.resnet18(pretrained=True)
-num_classes = 2 # 개, 고양이로 분류
+resnet = models.resnet18(pretrained=True).to(DEVICE)
+num_classes = 2 # 이진 분류이므로
 num_ftrs = resnet.fc.in_features
-resnet.fc = nn.Linear(num_ftrs, num_classes)
+resnet.fc = nn.Linear(num_ftrs, num_classes) # 출력층 노드 수 조절
 
-print(resnet)
+# print(resnet)
+
+#--------------------------------------------------------
+# train model
+#--------------------------------------------------------
+
+loss_function = nn.CrossEntropyLoss()
+
+# model(신경망) 파라미터를 optimizer에 전달해줄 때 nn.Module의 parameters() 메소드를 사용
+# Karpathy's learning rate 사용 (3e-4)
+optimizer = torch.optim.Adam(resnet.parameters(), lr=3e-4)
+
+batch_num = len(train)
+test_batch_num = len(test)
+losses = []
+
+for e in range(1):
+    total_loss = 0
+
+    progress = tqdm(enumerate(train), desc="Loss: ", total=batch_num)
+    resnet.train()
+    for i, data in progress:
+        features, labels = data[0].to(DEVICE), data[1].to(DEVICE)
+        resnet.zero_grad() # 모든 모델의 파라미터 미분값을 0으로 초기화
+        outputs = resnet(features)
+
+        loss = loss_function(outputs, labels)
+        loss.backward()
+        optimizer.step() # step() : 파라미터를 업데이트함
+
+        # training data 가져오기
+        current_loss = loss.item() # item() : 키, 값 반환
+        total_loss += current_loss
+
+        # set_description : 진행률 프로세스바 업데이트
+        progress.set_description("Loss: {:.4f}".format(total_loss/(i+1)))
+    
+    # ----------------- VALIDATION  ----------------- 
+    val_losses = 0
+    precision, recall, f1, accuracy = [], [], [], []
+    
+    # set model to evaluating (testing)
+    resnet.eval()
+    with torch.no_grad():
+        for i, data in enumerate(test):
+            features, labels = data[0].to(DEVICE), data[1].to(DEVICE)
+
+            outputs = resnet(features) # 네트워크로부터 예측값 가져오기
+
+            val_losses += loss_function(outputs, labels)
+
+            predicted_classes = torch.max(outputs, 1)[1] # 네트워크의 예측값으로부터 class 값(범주) 가져오기
+          
+    print(f"Epoch {e+1}/{EPOCHS}, training loss: {total_loss/batch_num}, validation loss: {val_losses/test_batch_num}")
+    losses.append(total_loss/batch_num) # 학습률을 위한 작업
+print("done")
