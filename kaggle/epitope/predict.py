@@ -64,5 +64,12 @@ def get_preprocessing(data_type, new_df):
     left_antigen_list = []
     right_antigen_list = []
     label_list = []
+
+    for epitope, antigen, s_p, e_p in tqdm(zip(new_df['epitope_seq'], new_df['antigen_seq'], new_df['start_position'], new_df['end_position'])):
+        epitope_pad = [26 for _ in range(CFG['EPITOPE_MAX_LEN'])] # 길이 맞춰주기 위한 패딩. 모두 같은 feature를 가져야 함
+        left_antigen_pad = [26 for _ in range(CFG['ANTIGEN_MAX_LEN'])]
+        right_antigen_pad = [26 for _ in range(CFG['ANTIGEN_MAX_LEN'])]
+        
+        epitope = [alpha_map[x] for x in epitope]
     
     return epitope_list, left_antigen_list, right_antigen_list, label_list
