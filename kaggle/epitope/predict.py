@@ -71,5 +71,53 @@ def get_preprocessing(data_type, new_df):
         right_antigen_pad = [26 for _ in range(CFG['ANTIGEN_MAX_LEN'])]
         
         epitope = [alpha_map[x] for x in epitope]
+
+        start_position = s_p-CFG['ANTIGEN_WINDOW']-1
+        end_position = e_p+CFG['ANTIGEN_WINDOW']
+
+        if start_position < 0:
+            start_position = 0
+        if end_position > len(antigen):
+            end_position = len(antigen)
+
+        # left / right antigen sequence 추출
+        left_antigen = antigen[int(start_position) : int(s_p)-1]
+        left_antigen = [alpha_map[x] for x in left_antigen]
+        
+        right_antigen = antigen[int(e_p) : int(end_position)]
+        right_antigen = [alpha_map[x] for x in right_antigen]
+
+        # 각 값에 패딩
+        epitope_pad[:len(epitope)] = epitope[:]
+        left_antigen_pad[:len(left_antigen)] = left_antigen[:]
+        right_antigen_pad[:len(right_antigen)] = right_antigen[:]
+        
+        epitope_list.append(epitope_pad)
+        left_antigen_list.append(left_antigen_pad)
+        right_antigen_list.append(right_antigen_pad)
     
+    label_list = None
+    if data_type != 'test':
+        label_list = []
+        for label in new_df['label']:
+            label_list.append(label)
+    print(f'{data_type} dataframe preprocessing was done.')
     return epitope_list, left_antigen_list, right_antigen_list, label_list
+
+# --------------------------------------------------------
+#   Call data
+# --------------------------------------------------------
+
+all_df = pd.read_csv('./data/open/train.csv')
+train_len = int(len(all_df)*0.8) # Split Train : Validation = 0.8 : 0.2
+train_df = all_df.iloc[:train_len]
+val_df = all_df.iloc[train_len:]
+
+# print(all_df)
+
+# --------------------------------------------------------
+#   Train data / Validation data
+# --------------------------------------------------------
+
+train_epitope_list, train_left_antigen_list, train_right_antigen_list, train_label_list = get_preprocessing('train', train_df)
+val_epitope_list, val_left_antigen_list, val_right_antigen_list, val_label_list = get_preprocessing('val', val_df)
