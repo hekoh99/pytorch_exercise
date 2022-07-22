@@ -121,3 +121,28 @@ val_df = all_df.iloc[train_len:]
 
 train_epitope_list, train_left_antigen_list, train_right_antigen_list, train_label_list = get_preprocessing('train', train_df)
 val_epitope_list, val_left_antigen_list, val_right_antigen_list, val_label_list = get_preprocessing('val', val_df)
+
+# --------------------------------------------------------
+#   Custom dataset
+# --------------------------------------------------------
+
+class CustomDataset(Dataset):
+    def __init__(self, epitope_list, left_antigen_list, right_antigen_list, label_list):
+        self.epitope_list = epitope_list
+        self.left_antigen_list = left_antigen_list
+        self.right_antigen_list = right_antigen_list
+        self.label_list = label_list
+        
+    def __getitem__(self, index):
+        self.epitope = self.epitope_list[index]
+        self.left_antigen = self.left_antigen_list[index]
+        self.right_antigen = self.right_antigen_list[index]
+        
+        if self.label_list is not None:
+            self.label = self.label_list[index]
+            return torch.tensor(self.epitope), torch.tensor(self.left_antigen), torch.tensor(self.right_antigen), self.label
+        else:
+            return torch.tensor(self.epitope), torch.tensor(self.left_antigen), torch.tensor(self.right_antigen)
+        
+    def __len__(self):
+        return len(self.epitope_list)
