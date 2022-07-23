@@ -148,11 +148,16 @@ class CustomDataset(Dataset):
         return len(self.epitope_list)
 
 train_dataset = CustomDataset(train_epitope_list, train_left_antigen_list, train_right_antigen_list, train_label_list)
-train_loader = DataLoader(train_dataset, batch_size = CFG['BATCH_SIZE'], shuffle=True, num_workers=CFG['NUM_WORKERS'])
+train_loader = DataLoader(train_dataset, batch_size = CFG['BATCH_SIZE'], shuffle=True)
 
 val_dataset = CustomDataset(val_epitope_list, val_left_antigen_list, val_right_antigen_list, val_label_list)
-val_loader = DataLoader(val_dataset, batch_size = CFG['BATCH_SIZE'], shuffle=False, num_workers=CFG['NUM_WORKERS'])
+val_loader = DataLoader(val_dataset, batch_size = CFG['BATCH_SIZE'], shuffle=False)
 
 # --------------------------------------------------------
 #   Define Model
 # --------------------------------------------------------
+
+_, __, ___, label = train_dataset[0]
+print(label)
+_, __, ___, label = next(iter(train_loader))
+print(label)
