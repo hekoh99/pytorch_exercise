@@ -157,7 +157,167 @@ val_loader = DataLoader(val_dataset, batch_size = CFG['BATCH_SIZE'], shuffle=Fal
 #   Define Model
 # --------------------------------------------------------
 
+''' # test - check dataset
 _, __, ___, label = train_dataset[0]
 print(label)
 _, __, ___, label = next(iter(train_loader))
-print(label)
+print(label) 
+# '''
+
+class BaseModel(nn.Module):
+    def __init__(self,
+                 epitope_length=CFG['EPITOPE_MAX_LEN'],
+                 epitope_emb_node=10,
+                 epitope_hidden_dim=64,
+                 left_antigen_length=CFG['ANTIGEN_MAX_LEN'],
+                 left_antigen_emb_node=10,
+                 left_antigen_hidden_dim=64,
+                 right_antigen_length=CFG['ANTIGEN_MAX_LEN'],
+                 right_antigen_emb_node=10,
+                 right_antigen_hidden_dim=64,
+                 lstm_bidirect=True
+                ):
+        super(BaseModel, self).__init__()
+        # Embedding Layer
+        self.epitope_embed = nn.Embedding(num_embeddings=27, # 0 ~ 26 까지 숫자로 맵핑했으므로
+                                          embedding_dim=epitope_emb_node, 
+                                          padding_idx=26
+                                         )
+        self.left_antigen_embed = nn.Embedding(num_embeddings=27,
+                                          embedding_dim=left_antigen_emb_node, 
+                                          padding_idx=26
+                                         )
+        self.right_antigen_embed = nn.Embedding(num_embeddings=27,
+                                          embedding_dim=right_antigen_emb_node, 
+                                          padding_idx=26
+                                         )
+        # LSTM
+        self.epitope_lstm = nn.LSTM(input_size=epitope_emb_node, 
+                                    hidden_size=epitope_hidden_dim, 
+                                    batch_first=True, 
+                                    bidirectional=lstm_bidirect
+                                   )
+        self.left_antigen_lstm = nn.LSTM(input_size=left_antigen_emb_node, 
+                                    hidden_size=left_antigen_hidden_dim, 
+                                    batch_first=True, 
+                                    bidirectional=lstm_bidirect
+                                   )
+        self.right_antigen_lstm = nn.LSTM(input_size=right_antigen_emb_node, 
+                                    hidden_size=right_antigen_hidden_dim, 
+                                    batch_first=True, 
+                                    bidirectional=lstm_bidirect
+                                   )
+
+        # Classifier
+        if lstm_bidirect:
+            in_channels = 2*(epitope_hidden_dim+left_antigen_hidden_dim+right_antigen_hidden_dim)
+        else:
+            in_channels = epitope_hidden_dim+left_antigen_hidden_dim+right_antigen_hidden_dim
+            
+        self.classifier = nn.Sequential(
+            nn.LeakyReLU(True),
+            nn.BatchNorm1d(in_channels),
+            nn.Linear(in_channels, in_channels//4),
+            nn.LeakyReLU(True),
+            nn.BatchNorm1d(in_channels//4),
+            nn.Linear(in_channels//4, 1)
+        )
+        
+    def forward(self, epitope_x, left_antigen_x, right_antigen_x):
+        BATCH_SIZE = epitope_x.size(0)
+        # Get Embedding Vector
+        epitope_x = self.epitope_embed(epitope_x)
+        left_antigen_x = self.left_antigen_embed(left_antigen_x)
+        right_antigen_x = self.right_antigen_embed(right_antigen_x)
+        
+        # LSTM
+        epitope_hidden, _ = self.epitope_lstm(epitope_x)
+        epitope_hidden = epitope_hidden[:,-1,:] # output dimension은 (batch, time_step, hidden dimension) 순이다. 양방향일 경우 hidden_size*2
+
+        left_antigen_hidden, _ = self.left_antigen_lstm(left_antigen_x)
+        left_antigen_hidden = left_antigen_hidden[:,-1,:]
+        
+        right_antigen_hidden, _ = self.right_antigen_lstm(right_antigen_x)
+        right_antigen_hidden = right_antigen_hidden[:,-1,:]
+        
+        # Feature Concat -> Binary Classifier
+        x = torch.cat([epitope_hidden, left_antigen_hidden, right_antigen_hidden], axis=-1)
+        x = self.classifier(x).view(-1)
+        return x
+
+# --------------------------------------------------------
+#   Train
+# --------------------------------------------------------
+
+def validation(model, val_loader, criterion, device):
+    model.eval()
+    pred_proba_label = []
+    true_label = []
+    val_loss = []
+    with torch.no_grad():
+        for epitope_seq, left_antigen_seq, right_antigen_seq, label in tqdm(iter(val_loader)):
+            epitope_seq = epitope_seq.to(device)
+            left_antigen_seq = left_antigen_seq.to(device)
+            right_antigen_seq = right_antigen_seq.to(device)
+            label = label.float().to(device)
+            
+            model_pred = model(epitope_seq, left_antigen_seq, right_antigen_seq)
+            loss = criterion(model_pred, label)
+            model_pred = torch.sigmoid(model_pred).to('cpu')
+            
+            pred_proba_label += model_pred.tolist()
+            true_label += label.to('cpu').tolist()
+            
+            val_loss.append(loss.item())
+            
+    pred_label = np.where(np.array(pred_proba_label)>CFG['THRESHOLD'], 1, 0)
+    val_f1 = f1_score(true_label, pred_label, average='macro')
+    return np.mean(val_loss), val_f1
+
+def train(model, optimizer, train_loader, val_loader, scheduler, device):
+    model.to(device)
+    criterion = nn.BCEWithLogitsLoss().to(device) 
+    
+    best_val_f1 = 0
+    for epoch in range(1, CFG['EPOCHS']+1):
+        model.train()
+        train_loss = []
+        for epitope_seq, left_antigen_seq, right_antigen_seq, label in tqdm(iter(train_loader)):
+            epitope_seq = epitope_seq.to(device)
+            left_antigen_seq = left_antigen_seq.to(device)
+            right_antigen_seq = right_antigen_seq.to(device)
+            label = label.float().to(device)
+            
+            optimizer.zero_grad()
+            
+            output = model(epitope_seq, left_antigen_seq, right_antigen_seq)
+            loss = criterion(output, label)
+            
+            loss.backward()
+            optimizer.step()
+            
+            train_loss.append(loss.item())
+            
+            if scheduler is not None:
+                scheduler.step()
+                    
+        val_loss, val_f1 = validation(model, val_loader, criterion, device)
+        print(f'Epoch : [{epoch}] Train Loss : [{np.mean(train_loss):.5f}] Val Loss : [{val_loss:.5f}] Val F1 : [{val_f1:.5f}]')
+        
+        if best_val_f1 < val_f1:
+            best_val_f1 = val_f1
+            torch.save(model.state_dict(), './best_model.pth', _use_new_zipfile_serialization=False)
+            print('Model Saved.')
+    return best_val_f1
+
+# --------------------------------------------------------
+#   Run
+# --------------------------------------------------------
+
+model = BaseModel()
+model.eval()
+optimizer = torch.optim.Adam(params = model.parameters(), lr = CFG["LEARNING_RATE"])
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader)*CFG['EPOCHS'], eta_min=0)
+
+best_score = train(model, optimizer, train_loader, val_loader, scheduler, device)
+print(f'Best Validation F1 Score : [{best_score:.5f}]')
