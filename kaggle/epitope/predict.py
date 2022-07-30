@@ -321,3 +321,10 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(trai
 
 best_score = train(model, optimizer, train_loader, val_loader, scheduler, device)
 print(f'Best Validation F1 Score : [{best_score:.5f}]')
+
+# --------------------------------------------------------
+#   Inference
+# --------------------------------------------------------
+
+test_df = pd.read_csv('./data/open/test.csv')
+test_epitope_list, test_left_antigen_list, test_right_antigen_list, test_label_list = get_preprocessing('test', test_df)
