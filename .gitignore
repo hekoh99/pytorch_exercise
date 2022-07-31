@@ -137,3 +137,7 @@ git-manager.ipynb
 # Data
 data/
 .zip
+result/
+
+# model saved
+*.pth
