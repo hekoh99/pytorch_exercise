@@ -142,4 +142,5 @@ result/
 # model saved
 pretrained/
 *.pth
-models/*.pt
+*.pt
+*/models/*.pt
